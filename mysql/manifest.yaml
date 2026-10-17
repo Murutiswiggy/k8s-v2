@@ -1,10 +1,11 @@
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
   name: mysql
   namespace: roboshop
-data:
-  MYSQL_ROOT_PASSWORD: RoboShop@1
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "RoboShop@1"
 ---
 apiVersion: v1
 kind: Service
@@ -16,11 +17,11 @@ metadata:
     component: mysql
     tier: db
 spec:
+  clusterIP: None
   ports:
-  - protocol: TCP
-    port: 3306 # service port
-    targetPort: 3306 # container port
-  clusterIP: None # headless service
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
   selector:
     project: roboshop
     component: mysql
@@ -37,9 +38,9 @@ metadata:
     tier: db
 spec:
   ports:
-  - protocol: TCP
-    port: 3306 # service port
-    targetPort: 3306 # container port
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
   selector:
     project: roboshop
     component: mysql
@@ -55,13 +56,13 @@ metadata:
     component: mysql
     tier: db
 spec:
+  serviceName: mysql-headless
+  replicas: 1
   selector:
     matchLabels:
       project: roboshop
       component: mysql
       tier: db
-  serviceName: "mysql-headless"
-  replicas: 1
   template:
     metadata:
       labels:
@@ -70,21 +71,26 @@ spec:
         tier: db
     spec:
       containers:
-      - name: mysql
-        image: murali9686/mysql:2.0.0
-        envFrom:
-        - configMapRef:
-            name: mysql
-        volumeMounts:
         - name: mysql
-          mountPath: /var/lib/mysql
-  # PVC
+          image: murali9686/mysql:2.0.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql
+                  key: MYSQL_ROOT_PASSWORD
+          volumeMounts:
+            - name: mysql
+              mountPath: /var/lib/mysql
   volumeClaimTemplates:
-  - metadata:
-      name: mysql
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: "roboshop-ebs"
-      resources:
-        requests:
-          storage: 1Gi
+    - metadata:
+        name: mysql
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: roboshop-ebs
+        resources:
+          requests:
+            storage: 1Gi
